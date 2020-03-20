@@ -20,62 +20,53 @@ int64_t hash_(T key, size_t bucket_count) {
     return (sign * key) % bucket_count;
 }
 
+
+
 template <typename K, typename V>
 class ConcurrentMap {
 public:
     static_assert(is_integral_v<K>, "ConcurrentMap supports only integer keys");
+
     struct Access {
+        ~Access() {
+            guard.unlock();
+        }
+        mutex& guard;
         V& ref_to_value;
-        lock_guard<mutex> guard;
     };
-    struct MapAccess {
-        map<K, V>& ref_to_value;
-        lock_guard<mutex> guard;
+
+    struct Bucket {
+        map<K, V> data;
+        mutex guard;
     };
-    explicit ConcurrentMap(size_t bucket_count): count_of_buckets(bucket_count) {
-        cout << "constructed" << endl;
-        //data.reserve(bucket_count);
+
+    explicit ConcurrentMap(size_t bucket_count): buckets(vector<Bucket>(bucket_count)){
+        buckets_count = bucket_count;
     }
 
     Access operator[](const K& key) {
-        //int size_ = data.size();
-        //cout << "searching for " << key << endl;
-        int64_t nbucket = hash_(key, count_of_buckets);//key / __BUCKET_SIZE__;
-        //int nbucket = key / __BUCKET_SIZE__;
-        
-        auto& curdata = data[nbucket];
-        if (curdata.first.empty() || !curdata.first.count(key)) {
-            curdata.first[key] = V();
-        }
-        return { curdata.first[key], lock_guard(curdata.second) };
+        const size_t index = key % buckets_count;
+        auto& buck = buckets[index];
+        buck.guard.lock();
+        if (buck.data.count(key) == 0)
+            buck.data[key] = V();
+        return {buck.guard, buck.data[key]};
     }
-
-    MapAccess GetMapAccess(const K& key) {
-        return { data[key].first, lock_guard(data[key].second) };
-    }
-
 
     map<K, V> BuildOrdinaryMap() {
         map<K, V> res;
-        cout << "building ordinary map" << endl;
-        for (const auto& [k1, p] : data) {
-            auto map = GetMapAccess(k1);
-            for (const auto& [k, v] : map.ref_to_value) {
-                res[k] = v;
+        for (auto& i : buckets) {
+            i.guard.lock();
+            for (const auto& i1 : i.data) {
+                res[i1.first] = i1.second;
             }
+            i.guard.unlock();
         }
-        /*for (const auto& [k1, p] : data) {
-            for (const auto& map : p.first){
-                res[map.first] = operator[](map.first).ref_to_value;
-            }
-        }*/
         return res;
     }
 private:
-    //vector<pair<map<K, V>, mutex>> data;
-    map<int, pair<map<K, V>, mutex>> data;
-    //vector<map<K, V>> data;
-    size_t count_of_buckets;
+    size_t buckets_count;
+    vector<Bucket> buckets;
 };
 
 void RunConcurrentUpdates(
@@ -163,6 +154,6 @@ void TestSpeedup() {
 int main() {
     TestRunner tr;
     RUN_TEST(tr, TestConcurrentUpdate);
-    //RUN_TEST(tr, TestReadAndWrite);
-    //RUN_TEST(tr, TestSpeedup);
+    RUN_TEST(tr, TestReadAndWrite);
+    RUN_TEST(tr, TestSpeedup);
 }
