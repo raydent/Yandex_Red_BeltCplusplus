@@ -40,7 +40,7 @@ public:
         mutex guard;
     };
 
-    explicit ConcurrentMap(size_t bucket_count): buckets(vector<Bucket>(bucket_count)){
+    explicit ConcurrentMap(size_t bucket_count): buckets(bucket_count){
         buckets_count = bucket_count;
     }
 
