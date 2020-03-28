@@ -186,18 +186,14 @@ void AddQueriesStreamAsync(
             }
         }
 
-        //iota(docids.begin(), docids.end(), 0);
-        for (int i = 0; i < docids.size(); i++) {
-            docids[i] = i;
-        }
-        partial_sort(
-            begin(docids),
+        iota(docids.begin(), docids.end(), 0);
+        partial_sort(begin(docids),
             Head(docids, 5).end(),
             end(docids),
             [&docid_count](int64_t lhs, int64_t rhs) {
                 return pair(docid_count[lhs], -lhs) > pair(docid_count[rhs], -rhs);
-                }
-            );
+            }
+        );
 
         search_results_output << current_query << ':';
         for (size_t docid : Head(docids, 5)) {
